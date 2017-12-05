@@ -4,7 +4,7 @@ This was an attempt at an entry for the [Ludum Dare 40](https://ldjam.com/events
 
 It was, however, successful in allowing me to play with [Rust](https://www.rust-lang.org/en-US/)/[WebAssembly](http://webassembly.org/).
 
-[Play it here](https://matt-williams.github.io/cat-collector)
+[Play it here](https://matt-williams.github.io/cat-collector/docs)
 
 ## Building
 
