@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Cat Collector</title>
+<style>
+* {
+  border: 0;
+  outline: 0;
+  padding: 0;
+  margin: 0;
+}
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  background-color: #000;
+  color: #fff;
+  font-family: monospace;
+  position: relative;
+}
+div {
+  overflow-y: scroll;
+  height: calc(100% - 2em);
+}
+p {
+}
+input, input:focus {
+  background-color: #007;
+  color: #ff0;
+  font-family: monospace;
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  height: 1.75em;
+}
+::selection {
+  background-color: #fff;
+  color: #000;
+}
+</style>
+</head>
+<body>
+<div id="display"></div>
+<input id="input" type="text"></input>
+<script>
+var utf8Decoder = new TextDecoder("utf8");
+var utf8Encoder = new TextEncoder("utf8");
+
+function Display(container) {
+  this.container = container;
+  this.buffer = [];
+  this.timer = null;
+  this.line = null;
+}
+
+Display.INTERVAL_MS = 20;
+
+Display.prototype.add = function(msg) {
+  msg = msg.split("\n");
+  this.buffer = this.buffer.concat(msg);
+  if (!this.timer) {
+    this.timer = window.setInterval(this.update.bind(this), Display.INTERVAL_MS);
+  }
+}
+
+Display.prototype.update = function() {
+  if (!this.line) {
+    this.line = document.createElement("p");
+    if (this.buffer[0] == "") {
+      this.line.innerHTML = "&nbsp;";
+    }
+    this.container.appendChild(this.line);
+    var line = this.line;
+    window.setTimeout(() => line.scrollIntoView(true), 0);
+  }
+  var text = this.buffer[0];
+  this.line.innerHTML += text.substring(0, 1);
+  text = text.substring(1);
+  if (text != "") {
+    this.buffer[0] = text;
+  } else {
+    this.buffer = this.buffer.splice(1);
+    this.line = null;
+  }
+  if (this.buffer.length == 0) {
+    window.clearInterval(this.timer);
+    this.timer = null;
+  }
+}
+
+var display = new Display(document.getElementById("display"));
+
+function Input(input) {
+  this.input = input;
+  input.focus();
+  var other = this;
+  input.addEventListener("keyup", function(ev) {
+    ev.preventDefault();
+    if (ev.keyCode === 13) {
+      other.oninput(input.value);
+      input.value = "";
+    }
+  });
+}
+
+Input.prototype.oninput = function(input) {
+  let s = new WasmString(input);
+  module.instance.exports.on_input(s.ptr, s.len);
+  s.free();
+};
+
+var input = new Input(document.getElementById("input"));
+
+var timeout = null;
+
+var env = {
+  console_log: (msg, msg_len) => { console.log(WasmString.toString(msg, msg_len))},
+  display_add: (msg, msg_len) => { display.add(WasmString.toString(msg, msg_len)); },
+  timeout_set: (delay) => {
+    if (timeout) {
+      window.clearTimeout(timeout);
+    }
+    timeout = window.setTimeout(module.instance.exports.on_timeout, delay);
+  },
+  math_random: Math.random
+};
+
+var mod = fetch('cat_collector.wasm')
+  .then((response) => response.arrayBuffer())
+  .then(bytes => WebAssembly.instantiate(bytes, {env: env}))
+  .then(mod => module = mod);
+mod.then(_ => module.instance.exports.start())
+
+function WasmString() {
+  this.ptr = 0;
+  this.len = 0;
+  WasmString.prototype.set.apply(this, arguments);
+}
+
+WasmString.prototype.set = function() {
+  if ((arguments.length == 1) &&
+      (typeof(arguments[0]) == "string")) {
+    var str = utf8Encoder.encode(arguments[0]);
+    this.len = str.length;
+    if (str.length > 0) {
+      this.ptr = module.instance.exports.alloc(this.len);
+      var buf = new Uint8Array(module.instance.exports.memory.buffer, this.ptr, this.len);
+      buf.set(str);
+    } else {
+      this.ptr = 0;
+    }
+  } else if ((arguments.length == 2) &&
+             (typeof(arguments[0]) == "number") &&
+             (typeof(arguments[1]) == "number")) {
+    this.ptr = arguments[0];
+    this.len = arguments[1];
+  } else if (arguments.length > 0) {
+    throw "Invalid arguments"
+  }
+}
+
+WasmString.toString = function(ptr, len) {
+  var buf = new Uint8Array(module.instance.exports.memory.buffer, ptr, len);
+  return utf8Decoder.decode(buf);
+}
+
+WasmString.prototype.toString = function() {
+  return WasmString.toString(this.ptr, this.len);
+}
+
+WasmString.prototype.free = function() {
+  if (this.len > 0) {
+    module.instance.exports.free(this.ptr);
+  }
+  this.ptr = 0;
+  this.len = 0;
+}
+
+
+</script>
+</body>
+</html>
