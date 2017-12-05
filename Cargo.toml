@@ -1,0 +1,9 @@
+[package]
+name = "cat-collector"
+version = "0.1.0"
+authors = ["Matt Williams <matwilliams@hotmal.com>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
